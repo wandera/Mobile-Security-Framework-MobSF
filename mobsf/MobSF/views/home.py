@@ -21,6 +21,7 @@ from mobsf.MobSF.utils import (
     is_dir_exists,
     is_file_exists,
     is_safe_path,
+    key,
     print_n_send_error_response,
 )
 from mobsf.MobSF.views.helpers import FileType
@@ -36,12 +37,7 @@ from mobsf.StaticAnalyzer.models import (
 LINUX_PLATFORM = ['Darwin', 'Linux']
 HTTP_BAD_REQUEST = 400
 logger = logging.getLogger(__name__)
-
-
-@register.filter
-def key(d, key_name):
-    """To get dict element by key name in template."""
-    return d.get(key_name)
+register.filter('key', key)
 
 
 def index(request):
@@ -141,6 +137,10 @@ class Upload(object):
             return scanning.scan_xapk()
         elif self.file_type.is_apks():
             return scanning.scan_apks()
+        elif self.file_type.is_jar():
+            return scanning.scan_jar()
+        elif self.file_type.is_aar():
+            return scanning.scan_aar()
         elif self.file_type.is_zip():
             return scanning.scan_zip()
         elif self.file_type.is_ipa():
@@ -167,6 +167,16 @@ def about(request):
         'version': settings.MOBSF_VER,
     }
     template = 'general/about.html'
+    return render(request, template, context)
+
+
+def donate(request):
+    """Donate Route."""
+    context = {
+        'title': 'Donate',
+        'version': settings.MOBSF_VER,
+    }
+    template = 'general/donate.html'
     return render(request, template, context)
 
 

@@ -19,9 +19,11 @@ from django.shortcuts import render
 from django.template.defaulttags import register
 
 from mobsf.MobSF.utils import (
+    android_component,
     file_size,
     is_dir_exists,
     is_file_exists,
+    key,
     print_n_send_error_response,
 )
 from mobsf.StaticAnalyzer.models import (
@@ -45,7 +47,7 @@ from mobsf.StaticAnalyzer.views.android.db_interaction import (
 )
 from mobsf.StaticAnalyzer.views.android.icon_analysis import (
     find_icon_path_zip,
-    get_icon,
+    get_icon_apk,
 )
 from mobsf.StaticAnalyzer.views.android.manifest_analysis import (
     get_manifest,
@@ -57,6 +59,10 @@ from mobsf.StaticAnalyzer.views.android.strings import strings_from_apk
 from mobsf.StaticAnalyzer.views.android.xapk import (
     handle_split_apk,
     handle_xapk,
+)
+from mobsf.StaticAnalyzer.views.android.jar_aar import (
+    aar_analysis,
+    jar_analysis,
 )
 from mobsf.StaticAnalyzer.views.common.shared_func import (
     firebase_analysis,
@@ -74,12 +80,8 @@ from androguard.core.bytecodes import apk
 
 logger = logging.getLogger(__name__)
 logging.getLogger('androguard').setLevel(logging.ERROR)
-
-
-@register.filter
-def key(data, key_name):
-    """Return the data for a key_name."""
-    return data.get(key_name)
+register.filter('key', key)
+register.filter('android_component', android_component)
 
 
 def static_analyzer(request, api=False):
@@ -103,11 +105,12 @@ def static_analyzer(request, api=False):
         match = re.match('^[0-9a-f]{32}$', checksum)
         if (match
                 and filename.lower().endswith(
-                    ('.apk', '.xapk', '.zip', '.apks'))
-                and typ in ['zip', 'apk', 'xapk', 'apks']):
+                    ('.apk', '.xapk', '.zip', '.apks', '.jar', '.aar'))
+                and typ in ['zip', 'apk', 'xapk', 'apks', 'jar', 'aar']):
             app_dic['dir'] = Path(settings.BASE_DIR)  # BASE DIR
             app_dic['app_name'] = filename  # APP ORIGINAL NAME
             app_dic['md5'] = checksum  # MD5
+            logger.info('Scan Hash: %s', checksum)
             # APP DIRECTORY
             app_dic['app_dir'] = Path(settings.UPLD_DIR) / checksum
             app_dic['tools_dir'] = app_dic['dir'] / 'StaticAnalyzer' / 'tools'
@@ -146,17 +149,10 @@ def static_analyzer(request, api=False):
                     logger.info('APK Extracted')
                     if not app_dic['files']:
                         # Can't Analyze APK, bail out.
-                        msg = 'APK file is invalid or corrupt'
-                        if api:
-                            return print_n_send_error_response(
-                                request,
-                                msg,
-                                True)
-                        else:
-                            return print_n_send_error_response(
-                                request,
-                                msg,
-                                False)
+                        return print_n_send_error_response(
+                            request,
+                            'APK file is invalid or corrupt',
+                            api)
                     app_dic['certz'] = get_hardcoded_cert_keystore(app_dic[
                                                                    'files'])
                     # Manifest XML
@@ -164,8 +160,7 @@ def static_analyzer(request, api=False):
                         app_dic['app_path'],
                         app_dic['app_dir'],
                         app_dic['tools_dir'],
-                        '',
-                        True,
+                        'apk',
                     )
                     app_dic['manifest_file'] = mani_file
                     app_dic['parsed_xml'] = mani_xml
@@ -174,31 +169,16 @@ def static_analyzer(request, api=False):
                     app_dic['real_name'] = get_app_name(
                         app_dic['app_path'],
                         app_dic['app_dir'],
-                        app_dic['tools_dir'],
                         True,
                     )
 
                     # Get icon
-                    res_path = os.path.join(app_dic['app_dir'], 'res')
-                    app_dic['icon_hidden'] = True
-                    # Even if the icon is hidden, try to guess it by the
-                    # default paths
-                    app_dic['icon_found'] = False
-                    app_dic['icon_path'] = ''
-                    # TODO: Check for possible different names for resource
-                    # folder?
-                    if os.path.exists(res_path):
-                        icon_dic = get_icon(
-                            app_dic['app_path'], res_path)
-                        if icon_dic:
-                            app_dic['icon_hidden'] = icon_dic['hidden']
-                            app_dic['icon_found'] = bool(icon_dic['path'])
-                            app_dic['icon_path'] = icon_dic['path']
+                    # apktool should run before this
+                    get_icon_apk(app_dic)
 
                     # Set Manifest link
-                    app_dic['mani'] = ('../manifest_view/?md5='
-                                       + app_dic['md5']
-                                       + '&type=apk&bin=1')
+                    app_dic['mani'] = (
+                        f'../manifest_view/?md5={app_dic["md5"]}&type=apk')
                     man_data_dic = manifest_data(app_dic['parsed_xml'])
                     app_dic['playstore'] = get_app_details(
                         man_data_dic['packagename'])
@@ -211,7 +191,8 @@ def static_analyzer(request, api=False):
                     elf_dict = elf_analysis(app_dic['app_dir'])
                     cert_dic = cert_info(
                         app_dic['app_dir'],
-                        app_dic['app_file'])
+                        app_dic['app_file'],
+                        man_data_dic)
                     apkid_results = apkid_analysis(app_dic[
                         'app_dir'], app_dic['app_path'], app_dic['app_name'])
                     tracker = Trackers.Trackers(
@@ -255,8 +236,6 @@ def static_analyzer(request, api=False):
                         'Performing Malware Check on extracted Domains')
                     code_an_dic['domains'] = MalwareDomainCheck().scan(
                         list(set(code_an_dic['urls_list'])))
-                    # Copy App icon
-                    copy_icon(app_dic['md5'], app_dic['icon_path'])
                     app_dic['zipped'] = 'apk'
 
                     logger.info('Connecting to Database')
@@ -321,6 +300,10 @@ def static_analyzer(request, api=False):
                     return context
                 else:
                     return render(request, template, context)
+            elif typ == 'jar':
+                return jar_analysis(request, app_dic, rescan, api)
+            elif typ == 'aar':
+                return aar_analysis(request, app_dic, rescan, api)
             elif typ == 'zip':
                 ret = (
                     '/static_analyzer_ios/?name='
@@ -384,7 +367,6 @@ def static_analyzer(request, api=False):
                             app_dic['app_dir'],
                             app_dic['tools_dir'],
                             pro_type,
-                            False,
                         )
                         app_dic['manifest_file'] = mani_file
                         app_dic['parsed_xml'] = mani_xml
@@ -393,17 +375,13 @@ def static_analyzer(request, api=False):
                         app_dic['real_name'] = get_app_name(
                             app_dic['app_path'],
                             app_dic['app_dir'],
-                            app_dic['tools_dir'],
                             False,
                         )
 
                         # Set manifest view link
                         app_dic['mani'] = (
-                            '../manifest_view/?md5='
-                            + app_dic['md5'] + '&type='
-                            + pro_type + '&bin=0'
-                        )
-
+                            f'../manifest_view/?md5={app_dic["md5"]}'
+                            f'&type={pro_type}')
                         man_data_dic = manifest_data(app_dic['parsed_xml'])
                         app_dic['playstore'] = get_app_details(
                             man_data_dic['packagename'])
@@ -528,7 +506,7 @@ def static_analyzer(request, api=False):
                 else:
                     return render(request, template, context)
             else:
-                err = ('Only APK,IPA and Zipped '
+                err = ('Only APK, JAR, AAR, IPA and Zipped '
                        'Android/iOS Source code supported now!')
                 logger.error(err)
         else:
@@ -606,20 +584,7 @@ def move_to_parent(inside, app_dir):
     shutil.rmtree(inside)
 
 
-def copy_icon(md5, icon_path=''):
-    """Copy app icon."""
-    try:
-        # Icon
-        icon_path = icon_path.encode('utf-8')
-        if icon_path:
-            if os.path.exists(icon_path):
-                shutil.copy2(icon_path, os.path.join(
-                    settings.DWD_DIR, md5 + '-icon.png'))
-    except Exception:
-        logger.exception('Generating Downloads')
-
-
-def get_app_name(app_path, app_dir, tools_dir, is_apk):
+def get_app_name(app_path, app_dir, is_apk):
     """Get app name."""
     if is_apk:
         a = apk.APK(app_path)

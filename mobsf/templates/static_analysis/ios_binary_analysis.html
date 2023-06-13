@@ -6,6 +6,7 @@
     {% block extra_css %}
     <!-- DataTables -->
     <link rel="stylesheet" href="{% static "adminlte/plugins/datatables-bs4/dataTables.bootstrap4.min.css" %}">
+    <link href="{% static "adminlte/plugins/sweetalert2/sweetalert2.min.css" %}" rel="stylesheet">
      <style type="text/css" media="print">
         @page { size: landscape; }
         @media print {
@@ -396,6 +397,7 @@
                 <strong><i class="fas fa-cog"></i> SCAN OPTIONS</strong>
                 </p>
                  <a role="button" class="btn btn-info" href="../static_analyzer_ios/?checksum={{ md5 }}&amp;name={{ file_name }}&amp;type=ipa&amp;rescan=1" ><i class="fa fa-sync"></i> Rescan</a>
+                 <a id="supbtn" onclick="list_suppressions()" role="button" class="btn btn-primary" data-target="#sup_list" data-toggle="modal" href="#"><i class="fa fa-list"></i> Manage Suppressions</a>
                 </p>
               </div>
             </div><!-- /.card -->
@@ -548,6 +550,41 @@
              <strong><i class="fas fa-lock"></i> APP TRANSPORT SECURITY (ATS)</strong>
              </p>
               <div class="table-responsive">
+                {% if ats_analysis and 'ats_summary' in ats_analysis and ats_analysis.ats_summary|length > 0 %}
+                <div class="row">
+                  <div class="col-sm-2 col-6">
+                  <div class="description-block border-right">
+                  <span class="text-danger">HIGH</span>
+                  <h5 class="description-header">{{ ats_analysis.ats_summary.high }}</h5>
+                  </div>
+                  </div>
+                  
+                  <div class="col-sm-2 col-6">
+                  <div class="description-block border-right">
+                  <span class="text-warning"></i> WARNING</span>
+                  <h5 class="description-header">{{ ats_analysis.ats_summary.warning }}</h5>
+                  </div>
+                  
+                  </div>
+                  
+                  <div class="col-sm-2 col-6">
+                  <div class="description-block border-right">
+                  <span class="text-info">INFO</span>
+                  <h5 class="description-header">{{ ats_analysis.ats_summary.info }}</h5>
+                  </div>
+                  
+                  </div>
+                  
+                  <div class="col-sm-2 col-6">
+                    <div class="description-block">
+                    <span class="text-success">SECURE</span>
+                    <h5 class="description-header">{{ ats_analysis.ats_summary.secure }}</h5>
+                    </div>
+                    
+                    </div>
+      
+                  </div>
+                  {% endif %}
                <table class="table table-bordered table-hover table-striped">
 
                   <thead>
@@ -559,8 +596,8 @@
                       </tr>
                   </thead>
                   <tbody>
-                    {% if ats_analysis|length > 0 %}
-                      {% for findings in ats_analysis %}
+                    {% if ats_analysis and 'ats_findings' in ats_analysis %}
+                      {% for findings in ats_analysis.ats_findings %}
                       <tr>
                         <td>{{ forloop.counter }}</td>
                         <td>
@@ -581,21 +618,11 @@
                         </td>
                       </tr>
                       {% endfor %}
-                    {% else %}
-                    <tr>
-                      <td></td>
-                      <td>
-                        No ATS exceptions found.
-                      <td>
-                        <span class="badge bg-success">secure</span>
-                      </td>
-                      <td>
-                        No insecure connections configured. App Transport Security (ATS) is enabled.
-                      </td>
-                    </tr>
                     {% endif %}
                   </tbody>
               </table>
+             
+                
                   </div>
           </div>
         </div><!-- /.card -->
@@ -618,7 +645,51 @@
              <strong><i class="fa fa-code"></i> IPA BINARY CODE ANALYSIS</strong>
              </p>
               <div class="table-responsive">
-               <table class="table table-bordered table-hover table-striped">
+                {% if binary_analysis and 'summary' in binary_analysis and binary_analysis.summary|length > 0 %}
+            <div class="row">
+              <div class="col-sm-2 col-6">
+              <div class="description-block border-right">
+              <span class="text-danger">HIGH</span>
+              <h5 class="description-header">{{ binary_analysis.summary.high }}</h5>
+              </div>
+              </div>
+              
+              <div class="col-sm-2 col-6">
+              <div class="description-block border-right">
+              <span class="text-warning"></i> WARNING</span>
+              <h5 class="description-header">{{ binary_analysis.summary.warning }}</h5>
+              </div>
+              
+              </div>
+              
+              <div class="col-sm-2 col-6">
+              <div class="description-block border-right">
+              <span class="text-info">INFO</span>
+              <h5 class="description-header">{{ binary_analysis.summary.info }}</h5>
+              </div>
+              
+              </div>
+              
+              <div class="col-sm-2 col-6">
+                <div class="description-block border-right">
+                <span class="text-success">SECURE</span>
+                <h5 class="description-header">{{ binary_analysis.summary.secure }}</h5>
+                </div>
+                
+                </div>
+
+              <div class="col-sm-2 col-6">
+                <div class="description-block">
+                <span class="text-disabled">SUPPRESSED</span>
+                <h5 class="description-header">{{ binary_analysis.summary.suppressed }}</h5>
+                </div>
+                
+                </div>
+                
+              
+              </div>
+              {% endif %}
+               <table id="table_code" class="table table-bordered table-hover table-striped">
                   <thead>
                       <tr>
                           <th>NO</th>
@@ -626,11 +697,12 @@
                           <th>SEVERITY</th>
                           <th>STANDARDS</th>
                           <th>DESCRIPTION</th>
-
+                          <th>OPTIONS</th>
                       </tr>
                   </thead>
                      <tbody>
-                    {% for issue, details in binary_analysis.items %}
+                    {% if binary_analysis and 'findings' in binary_analysis %}
+                    {% for issue, details in binary_analysis.findings.items %}
                     <tr>
                       <td>{{ forloop.counter }}</td>
                       <td>
@@ -669,10 +741,25 @@
                       <td>
                          {{ details|key:"detailed_desc" }}
                       </td>
+                      <td>
+
+                        <div class="dropdown show">
+                          <a class="btn btn-secondary dropdown-toggle" href="#" role="button" id="dropdownMenuLink" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                            <i class="fa fa-eye-slash"></i>
+                          </a>
+                          <div class="dropdown-menu" aria-labelledby="dropdownMenuLink">
+                            <a style="cursor:pointer;" class="dropdown-item" onclick="suppress('{{issue | escapejs }}', false, $(this.closest('tr')))">Suppress the rule <b>{{ issue }}</b> in <b>{{bundle_id}}</b></a>
+                          </div>
+                        </div>
+    
+                      </td>
                     </tr>
                     {% endfor %}
+                    {% endif %}
                  </tbody>
                     </table>
+            
+
                   </div>
               
           </div>
@@ -1266,6 +1353,35 @@
     </div>
 
 
+    <!--Modals-->
+<div class="modal" id="sup_list" tabindex="-1" role="dialog">
+  <div class="modal-dialog modal-xl">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h4 class="modal-title">Suppression Rules</h4>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">×</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <table id="sup_table" class="table table-bordered table-hover table-striped">
+          <thead>
+            <tr>
+                <th>Suppression Type</th>
+                <th>By Rule ID</th>
+                <th>By Files</th>
+            </tr>
+        </thead>
+        <tbody>
+        </tbody>
+        </table>
+      </div>
+    </div>
+    <!-- /.modal-content -->
+  </div>
+  <!-- /.modal-dialog -->
+</div>
+
 
 {% endblock %}
 <!--end new UI-->
@@ -1277,7 +1393,20 @@
 <script src="{% static "amcharts/maps.js" %}"></script>
 <script src="{% static "amcharts/worldIndiaLow.js" %}"></script>
 <script src="{% static "amcharts/animated.js" %}"></script>
+<script src="{% static "adminlte/plugins/sweetalert2/sweetalert2.min.js" %}"></script>
 <script>
+  var list_suppressions_url = '{% url 'list_suppressions' %}';
+  var suppress_by_files_url = '{% url 'suppress_by_files' %}';
+  var suppress_by_rule_url = '{% url 'suppress_by_rule' %}';
+  var delete_suppression_url = '{% url 'delete_suppression' %}';
+</script>
+<script src="{% static "others/js/suppression.js" %}"></script>
+<script>
+  // Globals
+  const csrf = '{{ csrf_token }}'
+  const pkg = '{{ bundle_id }}'
+  const hash = '{{ md5 }}'
+  
   $(function () {
     // Datatable
     $('table').DataTable({
