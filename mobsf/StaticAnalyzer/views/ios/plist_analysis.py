@@ -120,7 +120,7 @@ def plist_analysis(src, is_source):
         plist_files = []
         if is_source:
             logger.info("Finding Info.plist in iOS Source")
-            for dirpath, _dirnames, files in os.walk(src):
+            for dirpath, _, files in os.walk(src):
                 for name in files:
                     if not any(x in dirpath for x in SKIP_PATH) and name.endswith(
                         ".plist"
@@ -190,7 +190,17 @@ def plist_analysis(src, is_source):
                 plist_obj_
             )
             ats += ats_inseccon
-            plist_info["transport_security_info"] = ats_transport_security_info
+
+            # int that represents closest plist path relative to app's root dir
+            plist_closest_to_root = 9
+
+            if not plist_info.get("transport_security_info"):
+                path = os.path.normpath(plist_file)
+                parsed_path = path.split(os.sep)
+
+                if len(parsed_path) == plist_closest_to_root:
+                    logger.info(f"Filling up transport_security_info from {path}")
+                    plist_info["transport_security_info"] = ats_transport_security_info
 
         plist_info["inseccon"] = {
             "ats_findings": ats,
