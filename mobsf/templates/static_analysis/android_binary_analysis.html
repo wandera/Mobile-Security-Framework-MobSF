@@ -202,6 +202,12 @@
               </li>
               {% endif %}
               <li class="nav-item">
+                <a href="#malware_permissions" class="nav-link">
+                  <i class="fa fa-braille nav-icon"></i>
+                  <p>Abused Permissions</p>
+                </a>
+              </li>
+              <li class="nav-item">
                 <a href="#serverlocations" class="nav-link">
                   <i class="fas fa-globe-asia nav-icon"></i>
                   <p>Server Locations</p>
@@ -751,6 +757,7 @@
                               <th>STATUS</th>
                               <th>INFO </th>
                               <th>DESCRIPTION</th>
+                              <th>CODE MAPPINGS</th>
                           </tr>
                       </thead>
                       <tbody>
@@ -772,6 +779,25 @@
                           </td>
                           <td>{{ desc.info }}</td>
                           <td>{{ desc.description }}</td>
+                          <td>
+                            {% if perm in permission_mapping %}
+                              <a class="btn btn-primary btn-xs" data-toggle="collapse" href="#collapseperm{{forloop.counter}}" role="button" aria-expanded="false" aria-controls="collapseperm{{forloop.counter}}">
+                                Show Files
+                              </a>
+                              <div class="collapse" id="collapseperm{{forloop.counter}}">
+                                {% for k, v in permission_mapping.items %}
+                                  {% if k == perm %}
+                                    {% for file_path, lines in v.items %}
+                                      <small>
+                                        <a href="{% url "view_source" %}?file={{ file_path }}&amp;md5={{ md5 }}&amp;type={{app_type}}&amp;lines={{ lines }}"> {{ file_path }}</a>
+                                      </small>
+                                      </br>
+                                    {% endfor %}
+                                  {% endif %}
+                                {% endfor %}
+                              </div>
+                            {% endif %}
+                          </td>
                           </tr>
                           {% endfor %}
                       </tbody>
@@ -812,10 +838,17 @@
                     {{ details.metadata.description }}
                     </td>
                     <td>
-                     {% for file_path, lines in details.files.items %}
-                    <a href="{% url "view_source" %}?file={{ file_path }}&amp;md5={{ md5 }}&amp;type={{app_type}}&amp;lines={{ lines }}"> {{ file_path }}</a>
-                    <br/>
-                    {% endfor %}
+                      <a class="btn btn-primary btn-xs" data-toggle="collapse" href="#collapseapi{{forloop.counter}}" role="button" aria-expanded="false" aria-controls="collapseapi{{forloop.counter}}">
+                        Show Files
+                      </a>
+                      <div class="collapse" id="collapseapi{{forloop.counter}}">
+                        {% for file_path, lines in details.files.items %}
+                          <small>
+                            <a href="{% url "view_source" %}?file={{ file_path }}&amp;md5={{ md5 }}&amp;type={{app_type}}&amp;lines={{ lines }}"> {{ file_path }}</a>
+                          </small>
+                        </br>
+                        {% endfor %}
+                      </div>
                     </td>
                   </tr>    
                     {% endfor %} 
@@ -1301,10 +1334,26 @@
                       {% if details.metadata.masvs %}</br> <strong>OWASP MASVS: </strong>{{ details.metadata.masvs }}{% endif %}
                   </td>
                   <td>
-                  {% for file_path, lines in details.files.items %}
-                   <a href="{% url "view_source" %}?file={{ file_path }}&amp;md5={{ md5 }}&amp;type={{app_type}}&amp;lines={{ lines}}"> {{ file_path }}</a>
-                  <br/>
-                  {% endfor %}
+                    {% if details.files|length < 4 %}
+                      {% for file_path, lines in details.files.items %}
+                        <small>
+                          <a href="{% url "view_source" %}?file={{ file_path }}&amp;md5={{ md5 }}&amp;type={{app_type}}&amp;lines={{ lines}}"> {{ file_path }}</a>
+                        </small>
+                      </br>
+                      {% endfor %}
+                    {% else %}
+                      <a class="btn btn-primary btn-xs" data-toggle="collapse" href="#collapsecode{{forloop.counter}}" role="button" aria-expanded="false" aria-controls="collapsecode{{forloop.counter}}">
+                        Show Files
+                      </a>
+                      <div class="collapse" id="collapsecode{{forloop.counter}}">
+                        {% for file_path, lines in details.files.items %}
+                          <small>
+                            <a href="{% url "view_source" %}?file={{ file_path }}&amp;md5={{ md5 }}&amp;type={{app_type}}&amp;lines={{ lines}}"> {{ file_path }}</a>
+                          </small>
+                        </br>
+                        {% endfor %}
+                      </div>
+                    {% endif %}
                   </td>
                   <td>
 
@@ -1357,6 +1406,7 @@
                          {% endif %}
                           <th>NX</th>
                           <th>STACK CANARY</th>
+                          <th>RELRO</th>
                           <th>RPATH</th>
                           <th>RUNPATH</th>
                           <th>FORTIFY</th>
@@ -1371,7 +1421,9 @@
              <tr>
               {% if app_type not in 'so' %}
               <td>{{ forloop.counter }}</td>
-              <td>{{so.name}}</td>
+              <td>{{so.name | relative_path}}</br>
+                <a class="btn btn-primary btn-xs" href="{% url 'scan_library' checksum=md5 %}?library={{ so.name }}" target="_blank" rel="noopener noreferrer"><i class="fa fa-search"></i> Analyze</a> 
+              </td>
               {% endif %}
               <td><b>{{so.nx.is_nx}}</b>
                 <br/>
@@ -1381,6 +1433,10 @@
                   <br/>
                   <span class="badge bg-{% if so.stack_canary.severity == 'high' %}danger{% elif so.stack_canary.severity == 'warning' %}warning{% else %}info{% endif %}">{{so.stack_canary.severity}}</span>
                   <br/>{{so.stack_canary.description}}</td>
+              <td><b>{{so.relocation_readonly.relro}}</b>
+                <br/>
+                <span class="badge bg-{% if so.relocation_readonly.severity == 'high' %}danger{% elif so.relocation_readonly.severity == 'warning' %}warning{% else %}info{% endif %}">{{so.relocation_readonly.severity}}</span>
+                <br/>{{so.relocation_readonly.description}}</td>
               <td><b>{{so.rpath.rpath}}</b>
                 <br/>
                 <span class="badge bg-{% if so.rpath.severity == 'high' %}danger{% elif so.rpath.severity == 'warning' %}warning{% else %}info{% endif %}">{{so.rpath.severity}}</span>
@@ -1506,6 +1562,7 @@
     </div>
 </section>
  <!-- ===========================end file analysis ================================== -->
+ 
  <a id="apkid" class="anchor"></a>
 <section class="content">
   <div class="container-fluid">
@@ -1688,6 +1745,64 @@
 </section>
 {% endif %}
 <!-- ===========================end virus total ================================== -->
+<a id="malware_permissions" class="anchor"></a>
+<section class="content">
+  <div class="container-fluid">
+    <div class="row">
+        <div class="col-lg-12">
+        <div class="card">
+          <div class="card-body">
+            <p>
+             <strong><i class="fa fa-braille"></i> ABUSED PERMISSIONS</strong>
+             </p>
+              <div class="table-responsive">
+                
+                {% if malware_permissions %}
+              
+                <div class="container">
+                  <div class="row">
+                    <div class="col-sm">
+                <div class="progress-group">
+                  <strong>Top Malware Permissions</strong>
+                  <span class="float-right"><b>{{ malware_permissions.top_malware_permissions | length}}</b>/{{malware_permissions.total_malware_permissions}}</span>
+                  <div class="progress progress-sm">
+                  <div class="progress-bar bg-danger" aria-valuemin="0" style="width: {% widthratio malware_permissions.top_malware_permissions|length malware_permissions.total_malware_permissions 100 %}%;" aria-valuenow="{{ malware_permissions.top_malware_permissions | length}}" aria-valuemax="{{malware_permissions.total_malware_permissions}}"></div>
+                </div>
+                  <span class="product-description">
+                      {{ malware_permissions.top_malware_permissions | join:", "}}
+                    </span>  
+                </div>
+              </div>
+              <div class="col-sm">
+                <div class="progress-group">
+                  <strong>Other Common Permissions</strong>
+                  <span class="float-right"><b>{{ malware_permissions.other_abused_permissions | length}}</b>/{{ malware_permissions.total_other_permissions}}</span>
+                  <div class="progress progress-sm">
+                  <div class="progress-bar bg-warning" aria-valuemin="0" style="width: {% widthratio malware_permissions.other_abused_permissions|length malware_permissions.total_other_permissions 100 %}%;" aria-valuenow="{{ malware_permissions.other_abused_permissions | length}}" aria-valuemax="{{ malware_permissions.total_other_permissions}}"></div>
+                </div>
+                <span class="product-description">
+                  {{ malware_permissions.other_abused_permissions | join:", "}}
+                  </span>
+                  </div>
+                  </div>
+                 </div>
+                </div>
+                <hr>
+                <p>
+                  <strong>Malware Permissions</strong> are the top permissions that are widely abused by known malware. 
+                  <br/>
+                  <strong>Other Common Permissions</strong> are permissions that are commonly abused by known malware. 
+                </p>
+                 {% endif %}
+            </div>
+          </div>
+        </div><!-- /.card -->
+        </div>
+        <!-- end row -->
+        </div>
+    </div>
+</section>
+ <!-- ===========================end malware permissions  ================================== -->
 <style>
   #chartdiv {
   width: 100%;
@@ -1745,6 +1860,7 @@
   </div>
   </div>
 </section>
+
  <!-- ===========================end server locations ================================== -->
 <a id="malware_check" class="anchor"></a>
 <section class="content">

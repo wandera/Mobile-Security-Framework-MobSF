@@ -7,6 +7,7 @@ from django.shortcuts import render
 
 import mobsf.MalwareAnalyzer.views.Trackers as Trackers
 import mobsf.MalwareAnalyzer.views.VirusTotal as VirusTotal
+from mobsf.MalwareAnalyzer.views.android import permissions
 from mobsf.MobSF.utils import (
     file_size,
     print_n_send_error_response,
@@ -96,6 +97,12 @@ def common_analysis(request, app_dic, rescan, api, analysis_type):
                 '',
                 app_dic['app_dir'],
             )
+
+            # Malware Permission check
+            mal_perms = permissions.check_malware_permission(
+                man_data_dic['perm'])
+            man_an_dic['malware_permissions'] = mal_perms
+
             cert_dic = cert_info(
                 apk,
                 app_dic,
@@ -135,6 +142,7 @@ def common_analysis(request, app_dic, rescan, api, analysis_type):
                     'network_findings': [],
                     'network_summary': {},
                 },
+                'malware_permissions': {},
             }
             cert_dic = {
                 'certificate_info': '',
@@ -142,7 +150,10 @@ def common_analysis(request, app_dic, rescan, api, analysis_type):
                 'certificate_summary': {},
             }
         app_dic['real_name'] = ''
-        elf_dict = library_analysis(app_dic['app_dir'], 'elf')
+        elf_dict = library_analysis(
+            app_dic['app_dir'],
+            app_dic['md5'],
+            'elf')
         tracker = Trackers.Trackers(
             app_dic['app_dir'],
             app_dic['tools_dir'])
@@ -156,7 +167,8 @@ def common_analysis(request, app_dic, rescan, api, analysis_type):
         code_an_dic = code_analysis(
             app_dic['app_dir'],
             'apk',
-            app_dic['manifest_file'])
+            app_dic['manifest_file'],
+            man_data_dic['perm'])
         obfuscated_check(app_dic['app_dir'], code_an_dic)
         quark_results = []
         # Get the strings and metadata

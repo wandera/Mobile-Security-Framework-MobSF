@@ -81,6 +81,7 @@ def so_analysis(request, app_dic, rescan, api):
                 'network_findings': [],
                 'network_summary': {},
             },
+            'malware_permissions': {},
         }
         cert_dic = {
             'certificate_info': '',
@@ -88,13 +89,17 @@ def so_analysis(request, app_dic, rescan, api):
             'certificate_summary': {},
         }
         app_dic['real_name'] = ''
-        elf_dict = library_analysis(app_dic['app_dir'], 'elf')
+        elf_dict = library_analysis(
+            app_dic['app_dir'],
+            app_dic['md5'],
+            'elf')
         # File Analysis is used to store symbols from so
         app_dic['certz'] = get_symbols(
             elf_dict['elf_symbols'])
         apkid_results = {}
         code_an_dic = {
             'api': {},
+            'perm_mappings': {},
             'findings': {},
             'niap': {},
             'urls_list': [],
