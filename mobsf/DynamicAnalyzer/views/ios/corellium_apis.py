@@ -18,20 +18,37 @@ from mobsf.MobSF.utils import (
 SUCCESS_RESP = (200, 204)
 ERROR_RESP = (400, 403, 404, 409)
 OK = 'ok'
+CORELLIUM_DEFAULT = 'https://app.corellium.com'
+CORELLIUM_API_DOMAIN = getattr(
+    settings,
+    'CORELLIUM_API_DOMAIN',
+    CORELLIUM_DEFAULT)
+if not CORELLIUM_API_DOMAIN:
+    CORELLIUM_API_DOMAIN = CORELLIUM_DEFAULT
+CORELLIUM_API_KEY = getattr(
+    settings,
+    'CORELLIUM_API_KEY', '')
 logger = logging.getLogger(__name__)
 
 
-class CorelliumAPI:
+class CorelliumInit:
 
-    def __init__(self, project_id) -> None:
-        self.api = 'https://app.corellium.com/api/v1'
-        self.api_key = getattr(settings, 'CORELLIUM_API_KEY', '')
+    def __init__(self) -> None:
+        self.api = f'{CORELLIUM_API_DOMAIN}/api/v1'
+        self.api_key = CORELLIUM_API_KEY
         self.headers = {
+            'Accept': 'application/json',
             'Content-Type': 'application/json',
             'Authorization': f'Bearer {self.api_key}',
         }
-        self.project_id = project_id
         self.proxies, self.verify = upstream_proxy('https')
+
+
+class CorelliumAPI(CorelliumInit):
+
+    def __init__(self, project_id) -> None:
+        super().__init__()
+        self.project_id = project_id
 
     def api_ready(self):
         """Check API Availability."""
@@ -141,11 +158,11 @@ class CorelliumAPI:
                     instances.append(i)
         return instances
 
-    def create_ios_instance(self, flavor, version):
+    def create_ios_instance(self, name, flavor, version):
         """Create a Jailbroken iOS instance."""
         data = {
             'project': self.project_id,
-            'name': f'MobSF iOS - {flavor.upper()}',
+            'name': f'{name} - {flavor.upper()}',
             'flavor': flavor,
             'os': version,
         }
@@ -160,17 +177,7 @@ class CorelliumAPI:
         return False
 
 
-class CorelliumModelsAPI:
-
-    def __init__(self) -> None:
-        self.api = 'https://app.corellium.com/api/v1'
-        self.api_key = getattr(settings, 'CORELLIUM_API_KEY', '')
-        self.headers = {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json',
-            'Authorization': f'Bearer {self.api_key}',
-        }
-        self.proxies, self.verify = upstream_proxy('https')
+class CorelliumModelsAPI(CorelliumInit):
 
     def get_models(self):
         r = requests.get(
@@ -205,18 +212,11 @@ class CorelliumModelsAPI:
         return False
 
 
-class CorelliumInstanceAPI:
+class CorelliumInstanceAPI(CorelliumInit):
 
     def __init__(self, instance_id) -> None:
-        self.api = 'https://app.corellium.com/api/v1'
-        self.api_key = getattr(settings, 'CORELLIUM_API_KEY', '')
-        self.headers = {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json',
-            'Authorization': f'Bearer {self.api_key}',
-        }
+        super().__init__()
         self.instance_id = instance_id
-        self.proxies, self.verify = upstream_proxy('https')
 
     def start_instance(self):
         """Start instance."""
@@ -475,18 +475,11 @@ class CorelliumInstanceAPI:
         return r.json()['error']
 
 
-class CorelliumAgentAPI:
+class CorelliumAgentAPI(CorelliumInit):
 
     def __init__(self, instance_id) -> None:
-        self.api = 'https://app.corellium.com/api/v1'
-        self.api_key = getattr(settings, 'CORELLIUM_API_KEY', '')
-        self.headers = {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json',
-            'Authorization': f'Bearer {self.api_key}',
-        }
+        super().__init__()
         self.instance_id = instance_id
-        self.proxies, self.verify = upstream_proxy('https')
 
     def agent_ready(self):
         """Agent ready."""
@@ -538,11 +531,10 @@ class CorelliumAgentAPI:
 
     def install_ipa(self):
         """Install IPA."""
-        data = {'path': '/tmp/app.ipa'}
         r = requests.post(
             f'{self.api}/instances/{self.instance_id}/agent/v1/app/install',
             headers=self.headers,
-            json=data,
+            json={'path': '/tmp/app.ipa'},
             proxies=self.proxies,
             verify=self.verify)
         if r.status_code in SUCCESS_RESP:
