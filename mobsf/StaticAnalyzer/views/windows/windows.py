@@ -44,9 +44,15 @@ from mobsf.StaticAnalyzer.views.windows.db_interaction import (
     get_context_from_db_entry,
     save_or_update,
 )
+from mobsf.MobSF.views.authentication import (
+    login_required,
+)
+from mobsf.MobSF.views.authorization import (
+    Permissions,
+    has_permission,
+)
 
 logger = logging.getLogger(__name__)
-
 # Only used when xmlrpc is used
 proxy = None
 # Used to store the local config if windows analysis happens local
@@ -58,6 +64,7 @@ config = None
 # Windows Support Functions
 
 
+@login_required
 def staticanalyzer_windows(request, checksum, api=False):
     """Analyse a windows app."""
     try:
@@ -84,7 +91,7 @@ def staticanalyzer_windows(request, checksum, api=False):
                 api)
         typ = robj[0].SCAN_TYPE
         filename = robj[0].FILE_NAME
-        if typ != 'appx':
+        if typ not in settings.WINDOWS_EXTS:
             return print_n_send_error_response(
                 request,
                 'File type not supported',
@@ -106,6 +113,11 @@ def staticanalyzer_windows(request, checksum, api=False):
                 ' Fetching data from the DB...')
             context = get_context_from_db_entry(db_entry)
         else:
+            if not has_permission(request, Permissions.SCAN, api):
+                return print_n_send_error_response(
+                    request,
+                    'Permission Denied',
+                    False)
             logger.info('Windows Binary Analysis Started')
             app_dic['app_path'] = os.path.join(
                 app_dic['app_dir'], app_dic['md5'] + '.appx')

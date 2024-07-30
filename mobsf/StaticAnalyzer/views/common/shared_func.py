@@ -44,6 +44,13 @@ from mobsf.StaticAnalyzer.views.comparer import (
 from mobsf.StaticAnalyzer.views.common.entropy import (
     get_entropies,
 )
+from mobsf.MobSF.views.authentication import (
+    login_required,
+)
+from mobsf.MobSF.views.authorization import (
+    Permissions,
+    permission_required,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -191,35 +198,33 @@ def ar_extract(src, dst):
 
 def url_n_email_extract(dat, relative_path):
     """Extract URLs and Emails from Source Code."""
-    urls = []
-    emails = []
+    urls = set()
+    emails = set()
     urllist = []
     url_n_file = []
     email_n_file = []
     # URL Extraction
     urllist = URL_REGEX.findall(dat.lower())
-    uflag = 0
     for url in urllist:
-        if url not in urls:
-            urls.append(url)
-            uflag = 1
-    if uflag == 1:
-        url_n_file.append(
-            {'urls': urls, 'path': escape(relative_path)})
+        urls.add(url)
+    if urls:
+        url_n_file.append({
+            'urls': list(urls),
+            'path': escape(relative_path)})
 
     # Email Extraction
-    eflag = 0
     for email in EMAIL_REGEX.findall(dat.lower()):
-        if (email not in emails) and (not email.startswith('//')):
-            emails.append(email)
-            eflag = 1
-    if eflag == 1:
-        email_n_file.append(
-            {'emails': emails, 'path': escape(relative_path)})
+        if not email.startswith('//'):
+            emails.add(email)
+    if emails:
+        email_n_file.append({
+            'emails': list(emails),
+            'path': escape(relative_path)})
     return urllist, url_n_file, email_n_file
 
 
 # This is just the first sanity check that triggers generic_compare
+@login_required
 def compare_apps(request, hash1: str, hash2: str, api=False):
     if hash1 == hash2:
         error_msg = 'Results with same hash cannot be compared'
@@ -377,6 +382,8 @@ def get_symbols(symbols):
     return list(set(all_symbols))
 
 
+@login_required
+@permission_required(Permissions.SCAN)
 def scan_library(request, checksum):
     """Scan a shared library or framework from path name."""
     try:
@@ -401,12 +408,12 @@ def scan_library(request, checksum):
             return print_n_send_error_response(request, msg)
         with open(sfile, 'rb') as f:
             libchecksum = handle_uploaded_file(f, ext)
-        if ext in ('.ipa', '.dylib', '.a'):
+        if ext in [f'.{i}' for i in settings.IOS_EXTS]:
             static_analyzer = 'static_analyzer_ios'
         elif ext == '.appx':
             # Not applicable, but still set it
             static_analyzer = 'windows_static_analyzer'
-        elif ext in ('.zip', '.so', '.jar', '.aar', '.apk', '.xapk'):
+        elif ext in [f'.{i}' for i in settings.ANDROID_EXTS]:
             static_analyzer = 'static_analyzer'
         else:
             msg = 'Extension not supported'
